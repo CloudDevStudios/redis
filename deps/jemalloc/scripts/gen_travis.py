@@ -149,11 +149,7 @@ def get_extra_cflags(os, compiler):
         # -fcommon needs to be specified to correctly handle multiple
         # 'malloc_conf' symbols and such, which are declared weak under Linux.
         # Weak symbols don't work with MinGW-GCC.
-        if compiler != CL.value:
-            return ['-fcommon']
-        else:
-            return []
-
+        return ['-fcommon'] if compiler != CL.value else []
     # We get some spurious errors when -Warray-bounds is enabled.
     extra_cflags = ['-Werror', '-Wno-array-bounds']
     if compiler == CLANG.value or os == OSX:
@@ -177,33 +173,22 @@ def format_job(os, arch, combination):
     malloc_conf = [x.value for x in combination if x.type == Option.Type.MALLOC_CONF]
     features = [x.value for x in combination if x.type == Option.Type.FEATURE]
 
-    if len(malloc_conf) > 0:
+    if malloc_conf:
         configure_flags.append('--with-malloc-conf=' + ','.join(malloc_conf))
 
-    if not compilers:
-        compiler = GCC.value
-    else:
-        compiler = compilers[0]
-
+    compiler = GCC.value if not compilers else compilers[0]
     extra_environment_vars = ''
     cross_compile = CROSS_COMPILE_32BIT.value in features
     if os == LINUX and cross_compile:
         compiler_flags.append('-m32')
 
-    features_str = ' '.join([' {}=yes'.format(feature) for feature in features])
+    features_str = ' '.join([f' {feature}=yes' for feature in features])
 
-    stringify = lambda arr, name: ' {}="{}"'.format(name, ' '.join(arr)) if arr else ''
-    env_string = '{}{}{}{}{}{}'.format(
-            compiler,
-            features_str,
-            stringify(compiler_flags, 'COMPILER_FLAGS'),
-            stringify(configure_flags, 'CONFIGURE_FLAGS'),
-            stringify(get_extra_cflags(os, compiler), 'EXTRA_CFLAGS'),
-            extra_environment_vars)
+    stringify = lambda arr, name: f""" {name}="{' '.join(arr)}\"""" if arr else ''
+    env_string = f"{compiler}{features_str}{stringify(compiler_flags, 'COMPILER_FLAGS')}{stringify(configure_flags, 'CONFIGURE_FLAGS')}{stringify(get_extra_cflags(os, compiler), 'EXTRA_CFLAGS')}{extra_environment_vars}"
 
-    job = '    - os: {}\n'.format(os)
-    job += '      arch: {}\n'.format(arch)
-    job += '      env: {}'.format(env_string)
+    job = f'    - os: {os}\n' + f'      arch: {arch}\n'
+    job += f'      env: {env_string}'
     return job
 
 
@@ -225,14 +210,17 @@ def included(combination, exclude):
 
     @param exclude: A list of options to be avoided.
     """
-    return not any(excluded in combination for excluded in exclude)
+    return all(excluded not in combination for excluded in exclude)
 
 
 def generate_jobs(os, arch, exclude, max_unusual_opts, unusuals=all_unusuals):
-    jobs = []
-    for combination in generate_unusual_combinations(unusuals, max_unusual_opts):
-        if included(combination, exclude):
-            jobs.append(format_job(os, arch, combination))
+    jobs = [
+        format_job(os, arch, combination)
+        for combination in generate_unusual_combinations(
+            unusuals, max_unusual_opts
+        )
+        if included(combination, exclude)
+    ]
     return '\n'.join(jobs)
 
 
@@ -242,11 +230,7 @@ def generate_linux(arch):
     # Only generate 2 unusual options for AMD64 to reduce matrix size
     max_unusual_opts = MAX_UNUSUAL_OPTIONS if arch == AMD64 else 1
 
-    exclude = []
-    if arch == PPC64LE:
-        # Avoid 32 bit builds and clang on PowerPC
-        exclude = (CROSS_COMPILE_32BIT, CLANG,)
-
+    exclude = (CROSS_COMPILE_32BIT, CLANG) if arch == PPC64LE else []
     return generate_jobs(os, arch, exclude, max_unusual_opts)
 
 
