@@ -151,13 +151,13 @@ class Response(object):
         elif line[0] in ['*', '~', '>']:  # unfortunately JSON doesn't tell the difference between a list and a set
             self.json = []
             count = int(line[1:])
-            for i in range(count):
+            for _ in range(count):
                 ele = Response(f, line_counter)
                 self.json.append(ele.json)
         elif line[0] in ['%', '|']:
             self.json = {}
             count = int(line[1:])
-            for i in range(count):
+            for _ in range(count):
                 field = Response(f, line_counter)
                 # Redis allows fields to be non-strings but JSON doesn't.
                 # Luckily, for any kind of response we can validate, the fields are
@@ -267,13 +267,17 @@ def fetch_schemas(cli, port, args, docs):
 
 if __name__ == '__main__':
     # Figure out where the sources are
-    srcdir = os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + "/../src")
-    testdir = os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + "/../tests")
+    srcdir = os.path.abspath(
+        f"{os.path.dirname(os.path.abspath(__file__))}/../src"
+    )
+    testdir = os.path.abspath(
+        f"{os.path.dirname(os.path.abspath(__file__))}/../tests"
+    )
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--server', type=str, default='%s/redis-server' % srcdir)
+    parser.add_argument('--server', type=str, default=f'{srcdir}/redis-server')
     parser.add_argument('--port', type=int, default=6534)
-    parser.add_argument('--cli', type=str, default='%s/redis-cli' % srcdir)
+    parser.add_argument('--cli', type=str, default=f'{srcdir}/redis-cli')
     parser.add_argument('--module', type=str, action='append', default=[])
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--fail-commands-not-all-hit', action='store_true')
@@ -286,7 +290,7 @@ if __name__ == '__main__':
     print('Starting Redis server')
     redis_args = [args.server, '--port', str(args.port)]
     for module in args.module:
-        redis_args += ['--loadmodule', 'tests/modules/%s.so' % module]
+        redis_args += ['--loadmodule', f'tests/modules/{module}.so']
 
     fetch_schemas(args.cli, args.port, redis_args, docs)
 
@@ -301,9 +305,11 @@ if __name__ == '__main__':
     fetch_schemas(args.cli, args.port, sentinel_args, docs)
     os.unlink(config_file)
 
-    missing_schema = [k for k, v in docs.items()
-                      if "reply_schema" not in v and k not in IGNORED_COMMANDS]
-    if missing_schema:
+    if missing_schema := [
+        k
+        for k, v in docs.items()
+        if "reply_schema" not in v and k not in IGNORED_COMMANDS
+    ]:
         print("WARNING! The following commands are missing a reply_schema:")
         for k in sorted(missing_schema):
             print(f"  {k}")
@@ -313,17 +319,9 @@ if __name__ == '__main__':
 
     start = time.time()
 
-    # Obtain all the files to processes
-    paths = []
-    for path in glob.glob('%s/tmp/*/*.reqres' % testdir):
-        paths.append(path)
-
-    for path in glob.glob('%s/cluster/tmp/*/*.reqres' % testdir):
-        paths.append(path)
-
-    for path in glob.glob('%s/sentinel/tmp/*/*.reqres' % testdir):
-        paths.append(path)
-
+    paths = list(glob.glob(f'{testdir}/tmp/*/*.reqres'))
+    paths.extend(iter(glob.glob(f'{testdir}/cluster/tmp/*/*.reqres')))
+    paths.extend(iter(glob.glob(f'{testdir}/sentinel/tmp/*/*.reqres')))
     counter = collections.Counter()
     # Spin several processes to handle the files in parallel
     with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
@@ -338,8 +336,9 @@ if __name__ == '__main__':
     print("Hits per command:")
     for k, v in sorted(command_counter.items()):
         print(f"  {k}: {v}")
-    not_hit = set(set(docs.keys()) - set(command_counter.keys()) - set(IGNORED_COMMANDS))
-    if not_hit:
+    if not_hit := set(
+        set(docs.keys()) - set(command_counter.keys()) - set(IGNORED_COMMANDS)
+    ):
         if args.verbose:
             print("WARNING! The following commands were not hit at all:")
             for k in sorted(not_hit):

@@ -53,7 +53,6 @@ def convert_entry_to_objects_array(cmd, docs):
     information."""
     assert len(cmd) >= 9
     obj = {}
-    rep = [obj]
     name = cmd[0].upper()
     arity = cmd[1]
     command_flags = cmd[2]
@@ -64,8 +63,13 @@ def convert_entry_to_objects_array(cmd, docs):
     key = name.replace('|', ' ')
 
     subcommand_docs = docs.pop('subcommands', [])
-    rep.extend([convert_entry_to_objects_array(x, subcommand_docs[x[0]])[0] for x in subcommands])
-
+    rep = [
+        obj,
+        *[
+            convert_entry_to_objects_array(x, subcommand_docs[x[0]])[0]
+            for x in subcommands
+        ],
+    ]
     # The command's value is ordered so the interesting stuff that we care about
     # is at the start. Optional `None` and empty list values are filtered out.
     value = OrderedDict()
@@ -97,7 +101,9 @@ def convert_entry_to_objects_array(cmd, docs):
 
 
 # Figure out where the sources are
-srcdir = os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + "/../src")
+srcdir = os.path.abspath(
+    f"{os.path.dirname(os.path.abspath(__file__))}/../src"
+)
 
 # MAIN
 if __name__ == '__main__':
@@ -108,7 +114,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(**opts)
     parser.add_argument('--host', type=str, default='localhost')
     parser.add_argument('--port', type=int, default=6379)
-    parser.add_argument('--cli', type=str, default='%s/redis-cli' % srcdir)
+    parser.add_argument('--cli', type=str, default=f'{srcdir}/redis-cli')
     args = parser.parse_args()
 
     payload = OrderedDict()

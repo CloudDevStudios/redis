@@ -14,10 +14,7 @@ nparallel = cpu_count() * 2
 
 uname = uname()[0]
 
-if call("command -v gmake", shell=True) == 0:
-    make_cmd = 'gmake'
-else:
-    make_cmd = 'make'
+make_cmd = 'gmake' if call("command -v gmake", shell=True) == 0 else 'make'
 
 def powerset(items):
     result = []
@@ -71,13 +68,19 @@ for cc, cxx in possible_compilers:
                   and '--enable-prof' in config_opts:
                     continue
                 config_line = (
-                    'EXTRA_CFLAGS=-Werror EXTRA_CXXFLAGS=-Werror '
-                    + 'CC="{} {}" '.format(cc, " ".join(compiler_opts))
-                    + 'CXX="{} {}" '.format(cxx, " ".join(compiler_opts))
-                    + '../../configure '
-                    + " ".join(config_opts) + (' --with-malloc-conf=' +
-                    ",".join(malloc_conf_opts) if len(malloc_conf_opts) > 0
-                    else '')
+                    (
+                        (
+                            f'EXTRA_CFLAGS=-Werror EXTRA_CXXFLAGS=-Werror CC="{cc} {" ".join(compiler_opts)}" '
+                            + f'CXX="{cxx} {" ".join(compiler_opts)}" '
+                        )
+                        + '../../configure '
+                    )
+                    + " ".join(config_opts)
+                    + (
+                        ' --with-malloc-conf=' + ",".join(malloc_conf_opts)
+                        if len(malloc_conf_opts) > 0
+                        else ''
+                    )
                 )
 
                 # We don't want to test large vaddr spaces in 32-bit mode.
@@ -91,10 +94,10 @@ for cc, cxx in possible_compilers:
                 # Heap profiling and dss are not supported on OS X.
                 darwin_unsupported = ('--enable-prof' in config_opts or \
                   'dss:primary' in malloc_conf_opts)
-                if (uname == 'Linux' and linux_supported) \
-                  or (not linux_supported and (uname != 'Darwin' or \
-                  not darwin_unsupported)):
-                    print("""cat <<EOF > run_test_%(ind)d.sh
+                          if (uname == 'Linux' and linux_supported) \
+                            or (not linux_supported and (uname != 'Darwin' or \
+                            not darwin_unsupported)):
+                              print("""cat <<EOF > run_test_%(ind)d.sh
 #!/bin/sh
 
 set -e
@@ -123,8 +126,8 @@ run_cmd %(make_cmd)s check
 run_cmd %(make_cmd)s distclean
 EOF
 chmod 755 run_test_%(ind)d.sh""" % {'ind': ind, 'config_line': config_line,
-      'make_cmd': make_cmd})
-                    ind += 1
+                'make_cmd': make_cmd})
+                              ind += 1
 
 print('for i in `seq 0 %(last_ind)d` ; do echo run_test_${i}.sh ; done | xargs'
     ' -P %(nparallel)d -n 1 sh' % {'last_ind': ind-1, 'nparallel': nparallel})
